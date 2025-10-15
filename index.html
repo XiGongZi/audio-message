@@ -39,6 +39,17 @@
             rows="3"
             placeholder="在此输入要通过音频发送的消息"
           ></textarea>
+          <div class="chat__channel">
+            <label for="channelSelect" class="chat__label">频段选择</label>
+            <select id="channelSelect" class="select">
+              <option value="audible">标准（1.5–2.8 kHz，可听）</option>
+              <option value="high">高频（8–10 kHz，低音量）</option>
+              <option value="ultrasonic">近超声（17–19 kHz，接近静音）</option>
+            </select>
+            <p class="hint hint--compact" id="channelHint">
+              标准频段最稳定，适合初次测试。
+            </p>
+          </div>
           <div class="chat__controls">
             <button id="sendButton" class="btn" disabled>发送</button>
             <button id="clearButton" class="btn btn--ghost">清空记录</button>
@@ -59,7 +70,7 @@
         <ol>
           <li>使用本地静态服务器（如 <code>npx serve</code>）打开本页面，以便浏览器授予麦克风权限。</li>
           <li>分别在两台设备或两个标签页中打开本页面，放置在相距 30 厘米左右的位置。</li>
-          <li>在每个页面上点击“启用音频”，允许浏览器访问麦克风。</li>
+          <li>在每个页面上点击“启用音频”，允许浏览器访问麦克风，并选择合适的频段。</li>
           <li>任意一端输入文本并点击“发送”，另一端监听到声波后会自动解码并显示消息。</li>
         </ol>
       </footer>

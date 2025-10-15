@@ -6,6 +6,7 @@ const DEFAULT_CONFIG = {
   frequencyStep: 120,
   guardDuration: 0.12,
   amplitude: 0.3,
+  minEnergy: 0.01,
 };
 
 const CONTROL_BYTES = {
@@ -77,9 +78,11 @@ export class SimpleAudioModem {
     this.microphoneStream = null;
     this.isListening = false;
     this.analysisNode = null;
-    this.timeDomainBuffer = new Float32Array(0);
-    this.ringBuffer = new Float32Array(0);
     this.symbolSamples = 0;
+    this.ringBuffer = new Float32Array(0);
+    this._maxRingSymbols = 64;
+    this._bitQueue = [];
+    this._byteBuffer = [];
     this.callbacks = {
       message: new Set(),
       status: new Set(),
@@ -110,11 +113,7 @@ export class SimpleAudioModem {
     }
 
     this.audioContext = new AudioContext({ sampleRate: this.config.sampleRate });
-    this.symbolSamples = Math.round(
-      this.audioContext.sampleRate * this.config.symbolDuration
-    );
-    this.timeDomainBuffer = new Float32Array(this.symbolSamples);
-    this.ringBuffer = new Float32Array(this.symbolSamples);
+    this._recomputeDerived();
     return this.audioContext;
   }
 
@@ -145,6 +144,7 @@ export class SimpleAudioModem {
     source.connect(this.analysisNode);
 
     this.isListening = true;
+    this._resetDemodState();
     this.emit("status", "监听已开启");
 
     this._loopDecode();
@@ -191,9 +191,12 @@ export class SimpleAudioModem {
   }
 
   _packetToSamples(packet) {
-    const { symbolDuration, guardDuration } = this.config;
+    const { guardDuration } = this.config;
     const context = this.audioContext;
-    const guardSamples = Math.round(context.sampleRate * guardDuration);
+    const guardSamples = Math.max(
+      1,
+      Math.round(context.sampleRate * guardDuration)
+    );
     const totalSymbols = packet.length * (8 / this.config.bitsPerSymbol);
     const totalSamples =
       totalSymbols * this.symbolSamples + guardSamples * 2;
@@ -239,7 +242,10 @@ export class SimpleAudioModem {
   }
 
   _generateGuardTone(samples, offset, guardSamples) {
-    const guardFrequency = this.config.baseFrequency / 2;
+    const guardFrequency = Math.max(
+      400,
+      this.config.baseFrequency - this.config.frequencyStep * 1.5
+    );
     const dt = 1 / this.audioContext.sampleRate;
     let phase = 0;
 
@@ -255,14 +261,13 @@ export class SimpleAudioModem {
       return;
     }
 
-    const { symbolDuration, bitsPerSymbol } = this.config;
     const symbolSamples = this.symbolSamples;
     const timeDomain = new Float32Array(this.analysisNode.fftSize);
     this.analysisNode.getFloatTimeDomainData(timeDomain);
 
     this._addToRingBuffer(timeDomain);
 
-    const minEnergy = 0.01;
+    const minEnergy = this.config.minEnergy ?? 0.01;
     for (let offset = 0; offset + symbolSamples <= this.ringBuffer.length; offset += symbolSamples) {
       const slice = this.ringBuffer.subarray(offset, offset + symbolSamples);
       const energy = this._computeEnergy(slice);
@@ -287,7 +292,7 @@ export class SimpleAudioModem {
     extended.set(this.ringBuffer);
     extended.set(newChunk, this.ringBuffer.length);
 
-    const maxLength = this.symbolSamples * 64;
+    const maxLength = this.symbolSamples * this._maxRingSymbols;
     if (extended.length > maxLength) {
       this.ringBuffer = extended.subarray(extended.length - maxLength);
     } else {
@@ -327,10 +332,6 @@ export class SimpleAudioModem {
   }
 
   _handleDetectedSymbol(symbol) {
-    if (!this._bitQueue) {
-      this._bitQueue = [];
-    }
-
     this._bitQueue.push(symbol);
     if (this._bitQueue.length >= 8 / this.config.bitsPerSymbol) {
       let byte = 0;
@@ -345,10 +346,6 @@ export class SimpleAudioModem {
   }
 
   _collectByte(byte) {
-    if (!this._byteBuffer) {
-      this._byteBuffer = [];
-    }
-
     this._byteBuffer.push(byte);
     if (this._byteBuffer.length > 512) {
       this._byteBuffer.shift();
@@ -362,8 +359,7 @@ export class SimpleAudioModem {
     const lastFrame = frames[frames.length - 1];
     const message = bytesToString(lastFrame);
     this.emit("message", message);
-    this._byteBuffer = [];
-    this._bitQueue = [];
+    this._resetDemodState();
   }
 
   _goertzel(buffer, targetFrequency) {
@@ -387,6 +383,42 @@ export class SimpleAudioModem {
     const real = q1 - q2 * cosine;
     const imag = q2 * sine;
     return real * real + imag * imag;
+  }
+
+  updateConfig(partialConfig = {}) {
+    if (!partialConfig || typeof partialConfig !== "object") {
+      return;
+    }
+
+    const { sampleRate, ...rest } = partialConfig;
+    if (sampleRate && this.audioContext && sampleRate !== this.audioContext.sampleRate) {
+      console.warn(
+        `无法在已有 AudioContext 上切换 sampleRate（当前: ${this.audioContext.sampleRate} Hz）`
+      );
+    }
+
+    this.config = { ...this.config, ...partialConfig };
+    this._recomputeDerived();
+    this._resetDemodState();
+  }
+
+  getConfig() {
+    return { ...this.config };
+  }
+
+  _recomputeDerived() {
+    const rate = this.audioContext?.sampleRate ?? this.config.sampleRate;
+    this.symbolSamples = Math.max(1, Math.round(rate * this.config.symbolDuration));
+    if (this.symbolSamples === Infinity || Number.isNaN(this.symbolSamples)) {
+      this.symbolSamples = Math.round(rate * DEFAULT_CONFIG.symbolDuration);
+    }
+    this.ringBuffer = new Float32Array(0);
+  }
+
+  _resetDemodState() {
+    this._bitQueue = [];
+    this._byteBuffer = [];
+    this.ringBuffer = new Float32Array(0);
   }
 }
 
