@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web Audio 音频消息演示</title>
+    <link rel="stylesheet" href="assets/css/styles.css" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app__header">
+        <h1>声波聊天（纯原生实现）</h1>
+        <p>
+          同一个页面在两台设备或两个浏览器标签之间，通过 Web Audio API 把文本编码成声波并解码回来。
+        </p>
+      </header>
+
+      <section class="status" aria-live="polite">
+        <p id="status" class="status__text">
+          待机中：点击“启用音频”授权麦克风并开始监听。
+        </p>
+        <div class="status__actions">
+          <button id="startButton" class="btn">启用音频</button>
+          <button id="stopButton" class="btn btn--ghost" disabled>停止监听</button>
+        </div>
+      </section>
+
+      <section class="chat">
+        <div class="chat__composer">
+          <label class="chat__label" for="messageInput">要发送的文本</label>
+          <textarea
+            id="messageInput"
+            class="chat__input"
+            rows="3"
+            placeholder="在此输入要通过音频发送的消息"
+          ></textarea>
+          <div class="chat__controls">
+            <button id="sendButton" class="btn" disabled>发送</button>
+            <button id="clearButton" class="btn btn--ghost">清空记录</button>
+          </div>
+          <p class="hint">
+            提示：为了提升成功率，请保持两台设备的扬声器与麦克风距离 30 厘米以内，并尽量在安静环境中测试。
+          </p>
+        </div>
+
+        <div class="chat__log" aria-live="polite">
+          <h2>消息记录</h2>
+          <ul id="messageLog" class="log" role="log"></ul>
+        </div>
+      </section>
+
+      <footer class="app__footer">
+        <h2>如何开始</h2>
+        <ol>
+          <li>使用本地静态服务器（如 <code>npx serve</code>）打开本页面，以便浏览器授予麦克风权限。</li>
+          <li>分别在两台设备或两个标签页中打开本页面，放置在相距 30 厘米左右的位置。</li>
+          <li>在每个页面上点击“启用音频”，允许浏览器访问麦克风。</li>
+          <li>任意一端输入文本并点击“发送”，另一端监听到声波后会自动解码并显示消息。</li>
+        </ol>
+      </footer>
+    </main>
+
+    <script src="assets/js/main.js" type="module"></script>
+  </body>
+</html>
